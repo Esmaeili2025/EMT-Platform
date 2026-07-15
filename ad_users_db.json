@@ -46,7 +46,7 @@
     "name": "مهدی اسماعیلی",
     "email": "m.esmaeili@omran-azarestan.com",
     "department": "دفتر فنی و سازه",
-    "role": "DeptManager",
+    "role": "User",
     "active": true,
     "lastActive": "2026-06-17T09:30:00",
     "authorized": true,
@@ -67,6 +67,22 @@
     "allowedIp": "",
     "canTranslate": true,
     "canDefineTerms": true,
-    "computerName": "PC-ESMAEILI-USR"
+    "computerName": "PC-ESMAEILI-USR",
+    "password": ""
+  },
+  {
+    "username": "USER",
+    "name": "کاربر سیستم (USER)",
+    "email": "user@bnpp2project.local",
+    "department": "دفتر فنی و مهندسی",
+    "role": "User",
+    "active": true,
+    "lastActive": "",
+    "authorized": true,
+    "allowedIp": "",
+    "canTranslate": true,
+    "canDefineTerms": true,
+    "computerName": "PC-USER",
+    "password": "user123"
   }
 ]

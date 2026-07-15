@@ -403,6 +403,21 @@ const loadAdUsersDb = (): ADUser[] => {
       canTranslate: true,
       canDefineTerms: true,
       computerName: "PC-ESMAEILI-USR"
+    },
+    {
+      username: "user",
+      name: "کاربر سیستم (USER)",
+      email: "user@bnpp2project.local",
+      department: "دفتر فنی و مهندسی",
+      role: "User",
+      active: true,
+      lastActive: "",
+      authorized: true,
+      allowedIp: "",
+      canTranslate: true,
+      canDefineTerms: true,
+      computerName: "PC-USER",
+      password: "user123"
     }
   ];
 
