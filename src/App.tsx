@@ -40,7 +40,9 @@ import {
   Moon,
   Eye,
   LogOut,
-  Power
+  Power,
+  WifiOff,
+  CloudOff
 } from "lucide-react";
 import { 
   ResponsiveContainer, 
@@ -64,7 +66,7 @@ import { NetworkHealthIndicator } from "./components/NetworkHealthIndicator";
 import { AdminSetupGuide } from "./components/AdminSetupGuide";
 import { jsPDF } from "jspdf";
 import html2canvas from "html2canvas";
-import { saveTerms, clearTerms, getAllTerms, getTermsCount, deleteTerm } from "./lib/indexedDb";
+import { saveTerms, clearTerms, getAllTerms, getTermsCount, deleteTerm, saveTermsWithProgress, getAllTermsWithProgress } from "./lib/indexedDb";
 
 export default function App() {
   // Primary Tabs
@@ -498,9 +500,14 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
   // IndexedDB Offline Glossary Caching States
   const [offlineCachedCount, setOfflineCachedCount] = useState(0);
   const [isOfflineModeActive, setIsOfflineModeActive] = useState(false);
+  const [isOfflineTranslationMode, setIsOfflineTranslationMode] = useState(false);
   const [offlineSelectedCategory, setOfflineSelectedCategory] = useState("all");
   const [offlineSelectedProject, setOfflineSelectedProject] = useState("all");
   const [isCachingInProgress, setIsCachingInProgress] = useState(false);
+  const [offlineSyncProgress, setOfflineSyncProgress] = useState(0);
+  const [offlineQueryProgress, setOfflineQueryProgress] = useState(0);
+  const [isOfflineQuerying, setIsOfflineQuerying] = useState(false);
+  const [isOfflineSyncing, setIsOfflineSyncing] = useState(false);
   const [offlineTerms, setOfflineTerms] = useState<GlossaryTerm[]>([]);
   const [offlineSearchTerm, setOfflineSearchTerm] = useState("");
 
@@ -914,7 +921,8 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
       return;
     }
     const alerts: any[] = [];
-    glossary.forEach(item => {
+    const targetGlossary = isOfflineTranslationMode ? offlineTerms : glossary;
+    targetGlossary.forEach(item => {
       if (sourceText.includes(item.term)) {
         alerts.push({
           term: item.term,
@@ -924,14 +932,15 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
       }
     });
     setTerminologyAlerts(alerts);
-  }, [sourceText, sourceLang, targetLang, glossary]);
+  }, [sourceText, sourceLang, targetLang, glossary, offlineTerms, isOfflineTranslationMode]);
 
   // Automatically scan translated text and highlight terms that deviate from the approved glossary
   const translatedDeviations = useMemo(() => {
     if (!sourceText.trim() || !translatedText.trim()) return [];
     const list: { term: string; expected: string; definition: string }[] = [];
+    const targetGlossary = isOfflineTranslationMode ? offlineTerms : glossary;
 
-    glossary.forEach(item => {
+    targetGlossary.forEach(item => {
       let sourceHasTerm = false;
       let expectedTranslation = "";
 
@@ -966,13 +975,14 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
     });
 
     return list;
-  }, [sourceText, translatedText, sourceLang, targetLang, glossary]);
+  }, [sourceText, translatedText, sourceLang, targetLang, glossary, offlineTerms, isOfflineTranslationMode]);
 
   const comparisonDeviations = useMemo(() => {
-    if (!isComparisonMode || !sourceText.trim() || !comparisonTranslatedText.trim()) return [];
+    if (isOfflineTranslationMode || !isComparisonMode || !sourceText.trim() || !comparisonTranslatedText.trim()) return [];
     const list: { term: string; expected: string; definition: string }[] = [];
+    const targetGlossary = isOfflineTranslationMode ? offlineTerms : glossary;
 
-    glossary.forEach(item => {
+    targetGlossary.forEach(item => {
       let sourceHasTerm = false;
       let expectedTranslation = "";
 
@@ -1007,7 +1017,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
     });
 
     return list;
-  }, [isComparisonMode, sourceText, comparisonTranslatedText, sourceLang, targetLang, glossary]);
+  }, [isComparisonMode, sourceText, comparisonTranslatedText, sourceLang, targetLang, glossary, offlineTerms, isOfflineTranslationMode]);
 
   // Audio Wave Simulator when dictating
   useEffect(() => {
@@ -1101,18 +1111,29 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
   };
 
   const syncOfflineGlossaryState = async () => {
+    setIsOfflineQuerying(true);
+    setOfflineQueryProgress(0);
     try {
       const count = await getTermsCount();
       setOfflineCachedCount(count);
-      const terms = await getAllTerms();
+      const terms = await getAllTermsWithProgress((progress) => {
+        setOfflineQueryProgress(progress);
+      });
       setOfflineTerms(terms);
     } catch (e) {
       console.error("IndexedDB load error:", e);
+    } finally {
+      // Keep it slightly visible so the user notices the progress animation
+      setTimeout(() => {
+        setIsOfflineQuerying(false);
+      }, 500);
     }
   };
 
   const handleOfflineCacheSelectedSubset = async () => {
     setIsCachingInProgress(true);
+    setIsOfflineSyncing(true);
+    setOfflineSyncProgress(0);
     addSystemLog("آغاز فرآیند ذخیره‌سازی آفلاین و آماده‌سازی واژه‌نامه برای کارگاه ساختمانی...");
     
     try {
@@ -1133,20 +1154,27 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
       if (filtered.length === 0) {
         alert("هیچ واژه‌ای با فیلترهای انتخابی شما در دیتابیس مرکزی یافت نشد تا ذخیره شود.");
         setIsCachingInProgress(false);
+        setIsOfflineSyncing(false);
         return;
       }
 
-      // Save to IndexedDB
-      await saveTerms(filtered);
+      // Save to IndexedDB with progress tracking
+      await saveTermsWithProgress(filtered, (progress) => {
+        setOfflineSyncProgress(progress);
+      });
+      
       await syncOfflineGlossaryState();
       
       addSystemLog(`تعداد ${filtered.length} واژه تخصصی با موفقیت در پایگاه داده محلی IndexedDB مرورگر برای استفاده آفلاین در کارگاه ذخیره شد.`);
-      alert(`موفقیت‌آمیز: تعداد ${filtered.length} واژه مربوط به دپارتمان "${offlineSelectedCategory}" و پروژه "${offlineSelectedProject}" با موفقیت در حافظه مرورگر برای شرایط بدون اینترنت ذخیره شدند.`);
     } catch (e: any) {
       addSystemLog(`خطا در ذخیره‌سازی آفلاین: ${e.message}`);
       alert(`خطا در ذخیره‌سازی: ${e.message}`);
     } finally {
       setIsCachingInProgress(false);
+      // Keep it slightly visible so the user notices the progress animation
+      setTimeout(() => {
+        setIsOfflineSyncing(false);
+      }, 500);
     }
   };
 
@@ -1269,7 +1297,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
     setEngineTwoRating(0);
     setHasOfflineFallback(false);
     
-    if (isComparisonMode) {
+    if (isComparisonMode && !isOfflineTranslationMode) {
       addSystemLog(`درخواست ترجمه همزمان مقایسه‌ای با موتورهای ${selectedEngine} و ${comparisonEngine} ثبت شد...`);
       
       const endpointUrl = "/api/translate";
@@ -1421,7 +1449,8 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
         setIsTranslating(false);
       }
     } else {
-      addSystemLog(`درخواست ترجمه با موتور ${selectedEngine} ثبت شد...`);
+      const activeEngine = isOfflineTranslationMode ? "Ollama" : selectedEngine;
+      addSystemLog(`درخواست ترجمه با موتور ${activeEngine} ثبت شد...`);
       
       const endpointUrl = "/api/translate";
       const requestHeaders = { "Content-Type": "application/json" };
@@ -1429,7 +1458,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
         text: sourceText,
         sourceLang: isAutoDetect ? "auto" : sourceLang,
         targetLang,
-        engine: selectedEngine,
+        engine: activeEngine,
         username: currentUser.name,
         category: activeAdmixtureCategory,
         department: currentUser.department,
@@ -1448,7 +1477,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
           headers: requestHeaders,
           body: JSON.stringify(payload),
           onLog: addSystemLog,
-          endpointLabel: `موتور ترجمه [${selectedEngine}] (Translate API)`
+          endpointLabel: `موتور ترجمه [${activeEngine}] (Translate API)`
         });
 
         console.log(`[Lifecycle - Translate] [2. Response Received]`, {
@@ -1482,8 +1511,8 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
             errorPayload: err
           });
 
-          // Fallback to Ollama if status >= 400 and selectedEngine is not Ollama
-          if (status >= 400 && selectedEngine !== "Ollama") {
+          // Fallback to Ollama if status >= 400 and activeEngine is not Ollama
+          if (status >= 400 && activeEngine !== "Ollama") {
             addSystemLog(`خطای سرور اصلی (کد: ${status}). تلاش برای ترجمه با پردازشگر آفلاین پشتیبان Ollama...`);
             setHasOfflineFallback(true);
             
@@ -1520,7 +1549,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
         });
 
         // Network/other exceptions fallback to Ollama
-        if (selectedEngine !== "Ollama" && !hasOfflineFallback) {
+        if (activeEngine !== "Ollama" && !hasOfflineFallback) {
           try {
             addSystemLog(`عدم دسترسی به شبکه یا سرور اصلی (${e.message}). در حال تلاش برای ترجمه آفلاین پشتیبان با Ollama...`);
             setHasOfflineFallback(true);
@@ -3159,8 +3188,22 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
               محیط استقرار: <strong className="text-white">Windows Server 2025 (شبکه محلی BNPP2PROJECT.LOCAL)</strong>
             </span>
             <span className="hidden md:inline text-slate-500">|</span>
-            <span className="hidden md:inline text-slate-300">
+            <span className="text-slate-300 flex items-center gap-1">
               دیتابیس ابری: <strong className="text-cyan-400 font-mono">{process.env.GEMINI_API_KEY ? "متصل فعال" : "شبیه‌ساز لوکال"}</strong>
+            </span>
+            <span className="hidden md:inline text-slate-500">|</span>
+            <span className="text-slate-300 flex items-center gap-1.5">
+              {isOfflineTranslationMode ? (
+                <span className="flex items-center gap-1 text-rose-400 font-extrabold bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
+                  <WifiOff className="h-3 w-3 animate-pulse" />
+                  سامانه: آفلاین-فرست (Ollama)
+                </span>
+              ) : (
+                <span className="flex items-center gap-1 text-emerald-400 font-extrabold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
+                  <Globe className="h-3 w-3" />
+                  سامانه: آنلاین سراسری
+                </span>
+              )}
             </span>
             <span className="hidden md:inline text-slate-500">|</span>
             <span className="text-slate-300 flex items-center gap-1">
@@ -3279,7 +3322,46 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
           
           {/* TAB 1: TRANSLATOR ENGINE & OCR SPEECH */}
           {activeTab === "translate" && (
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+            <div className="flex flex-col gap-6">
+              {isOfflineTranslationMode && (
+                <div className="p-4 bg-rose-600/10 border border-rose-500/30 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-4 animate-fade-in" dir="rtl">
+                  <div className="flex items-center gap-3">
+                    <div className="p-2.5 bg-rose-600 text-white rounded-xl shadow-lg animate-pulse">
+                      <WifiOff className="h-5 w-5" />
+                    </div>
+                    <div className="text-right">
+                      <h4 className="text-xs font-black text-rose-900 flex items-center gap-2">
+                        <span>اتصال آفلاین اجباری (Offline-First Ready) فعال است</span>
+                        <span className="w-2 h-2 rounded-full bg-rose-600 animate-ping"></span>
+                      </h4>
+                      <p className="text-[11px] text-rose-700 font-medium mt-1 leading-relaxed">
+                        تمام درخواست‌های ترجمه مستقیماً توسط پردازشگر محلی <strong>Ollama</strong> و واژه‌نامه محلی کش‌شده در مرورگر (<strong>IndexedDB ({offlineCachedCount} واژه)</strong>) انجام می‌شود و پهنای باند شبکه خارجی مصرف نمی‌شود.
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex flex-col gap-2 w-full sm:w-auto">
+                    <div className="flex items-center gap-2 bg-rose-500/10 border border-rose-500/20 text-rose-800 px-3 py-1.5 rounded-xl text-[10px] font-black font-mono justify-center">
+                      <span>پایداری محلی: ۱۰۰٪ (آفلاین دائم)</span>
+                    </div>
+                    {isOfflineQuerying && (
+                      <div className="w-full sm:w-48 space-y-1 text-right animate-fade-in bg-rose-500/5 p-2 rounded-lg border border-rose-500/10">
+                        <div className="flex items-center justify-between text-[9px] font-extrabold text-rose-800">
+                          <span>در حال جستجوی واژه‌نامه محلی...</span>
+                          <span className="font-mono">{offlineQueryProgress}%</span>
+                        </div>
+                        <div className="w-full h-1 bg-rose-200 rounded-full overflow-hidden">
+                          <div 
+                            className="h-full bg-rose-600 rounded-full transition-all duration-300" 
+                            style={{ width: `${offlineQueryProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
               
               {/* Left Column: Translation Box */}
               <div className="lg:col-span-9 flex flex-col gap-6">
@@ -3376,9 +3458,33 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
 
                      {/* Comparison Control / Engine selection Priority */}
                     <div className="flex flex-wrap items-center gap-4">
+                      {/* Toggle Offline-First Mode Button */}
+                      <button
+                        onClick={() => {
+                          const nextMode = !isOfflineTranslationMode;
+                          setIsOfflineTranslationMode(nextMode);
+                          if (nextMode) {
+                            setIsComparisonMode(false);
+                            setSelectedEngine("Ollama");
+                          }
+                          addSystemLog(nextMode ? "فعال‌سازی حالت اولویت آفلاین (آفلاین-فرست) برای ترجمه" : "غیرفعال‌سازی حالت اولویت آفلاین");
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
+                          isOfflineTranslationMode
+                            ? "bg-rose-600 hover:bg-rose-700 text-white border-rose-600 shadow-md active:scale-95 transition-transform cursor-pointer"
+                            : "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 cursor-pointer"
+                        }`}
+                        title="ترجمه کاملا آفلاین بدون نیاز به اینترنت با Ollama و حافظه محلی واژه‌نامه"
+                        type="button"
+                      >
+                        <WifiOff className="h-3.5 w-3.5" />
+                        {isOfflineTranslationMode ? "حالت آفلاین-فرست (فعال)" : "سوئیچ به آفلاین-فرست"}
+                      </button>
+
                       {/* Toggle Comparison Mode Button */}
                       <button
                         onClick={() => {
+                          if (isOfflineTranslationMode) return;
                           const nextMode = !isComparisonMode;
                           setIsComparisonMode(nextMode);
                           if (nextMode && !comparisonTranslatedText) {
@@ -3386,12 +3492,16 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
                           }
                           addSystemLog(nextMode ? "فعال‌سازی حالت مقایسه همزمان موتورها" : "غیرفعال‌سازی حالت مقایسه‌ای");
                         }}
+                        disabled={isOfflineTranslationMode}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
-                          isComparisonMode
-                            ? "bg-amber-500/10 text-amber-700 border-amber-500/30"
-                            : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200"
+                          isOfflineTranslationMode
+                            ? "bg-slate-50 text-slate-400 border-slate-100 cursor-not-allowed opacity-50"
+                            : isComparisonMode
+                              ? "bg-amber-500/10 text-amber-700 border-amber-500/30 cursor-pointer"
+                              : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 cursor-pointer"
                         }`}
-                        title="مقایسه همزمان دو موتور ترجمه"
+                        title={isOfflineTranslationMode ? "در حالت آفلاین-فرست مقایسه همزمان در دسترس نیست" : "مقایسه همزمان دو موتور ترجمه"}
+                        type="button"
                       >
                         <Columns className="h-3.5 w-3.5 text-amber-600" />
                         {isComparisonMode ? "حالت مقایسه دو موتور (فعال)" : "سوئیچ به حالت مقایسه‌ای"}
@@ -3403,9 +3513,10 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
                             {isComparisonMode ? "موتور اول:" : "انتخاب موتور ترجمه:"}
                           </span>
                           <select 
-                            className="bg-brand-light border border-slate-200 rounded-lg text-xs p-2 text-brand-primary font-bold focus:outline-none"
+                            className="bg-brand-light border border-slate-200 rounded-lg text-xs p-2 text-brand-primary font-bold focus:outline-none disabled:bg-slate-150 disabled:text-slate-400 disabled:border-slate-200 disabled:cursor-not-allowed"
                             value={selectedEngine}
                             onChange={(e) => setSelectedEngine(e.target.value)}
+                            disabled={isOfflineTranslationMode}
                           >
                             {engines.filter(eng => eng.enabled).map(eng => {
                               const lat = engineLatencies[eng.id]?.latencyMs;
@@ -3420,7 +3531,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
                           </select>
                         </div>
 
-                        {isComparisonMode && (
+                        {isComparisonMode && !isOfflineTranslationMode && (
                           <div className="flex items-center gap-2 animate-fade-in">
                             <span className="text-xs text-slate-400 font-medium">موتور دوم:</span>
                             <select 
@@ -5125,6 +5236,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
 
               </div>
             </div>
+          </div>
           )}
 
           {/* TAB 2: GLOSSARY / INTELLIGENT DICTIONARY */}
@@ -5297,11 +5409,15 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
 
                 <div className="space-y-4 text-xs">
                   {/* Offline Status indicator */}
-                  <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl space-y-1.5">
+                  <div className="p-3.5 bg-slate-50 border border-slate-200 rounded-xl space-y-2.5">
                     <div className="flex items-center justify-between">
                       <span className="text-slate-500">وضعیت پایگاه داده محلی:</span>
                       {offlineCachedCount > 0 ? (
-                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-black flex items-center gap-1">
+                        <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded text-[10px] font-black flex items-center gap-1.5">
+                          <span className="relative flex h-2.5 w-2.5">
+                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500 animate-dot-pulse"></span>
+                          </span>
                           <Check className="h-3 w-3" /> دارای {offlineCachedCount} واژه کش شده
                         </span>
                       ) : (
@@ -5310,7 +5426,46 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
                         </span>
                       )}
                     </div>
-                    <div className="flex items-center justify-between">
+
+                    {/* Live Progress Bar for Syncing (Write to IndexedDB) */}
+                    {isOfflineSyncing && (
+                      <div className="space-y-1.5 animate-fade-in text-right">
+                        <div className="flex items-center justify-between text-[10px] font-black text-brand-primary">
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-brand-primary animate-ping" />
+                            در حال دانلود و ذخیره‌سازی آفلاین...
+                          </span>
+                          <span className="font-mono">{offlineSyncProgress}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden border border-slate-100">
+                          <div 
+                            className="h-full bg-gradient-to-r from-brand-primary to-indigo-500 rounded-full transition-all duration-300 ease-out" 
+                            style={{ width: `${offlineSyncProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Live Progress Bar for Querying (Read from IndexedDB) */}
+                    {isOfflineQuerying && (
+                      <div className="space-y-1.5 animate-fade-in text-right">
+                        <div className="flex items-center justify-between text-[10px] font-black text-emerald-600">
+                          <span className="flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                            در حال کوئری و بازیابی از حافظه محلی...
+                          </span>
+                          <span className="font-mono">{offlineQueryProgress}%</span>
+                        </div>
+                        <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden border border-slate-100">
+                          <div 
+                            className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all duration-300 ease-out" 
+                            style={{ width: `${offlineQueryProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="flex items-center justify-between border-t border-slate-100 pt-2">
                       <span className="text-slate-500">حالت شبیه‌ساز قطع اینترنت کارگاه:</span>
                       <button
                         type="button"
