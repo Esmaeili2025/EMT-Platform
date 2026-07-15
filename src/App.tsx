@@ -3105,6 +3105,18 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
                   <div className="font-bold text-slate-100">کاربر کارگاه پرند (User)</div>
                   <div className="text-[8px] text-slate-400 font-mono">سطح دسترسی عادی کارگاهی</div>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setLoginUsername("USER");
+                    setLoginPassword("user123");
+                    addSystemLog("انتخاب خودکار اکانت درخواستی (USER)");
+                  }}
+                  className="p-2 bg-indigo-950/50 hover:bg-indigo-900/50 border border-indigo-500/60 hover:border-indigo-400 rounded-lg text-slate-300 text-right transition-all cursor-pointer w-full col-span-2 mt-1"
+                >
+                  <div className="font-bold text-indigo-300">کاربر جدید درخواستی (USER)</div>
+                  <div className="text-[8px] text-indigo-400 font-mono">User: USER / Pass: user123</div>
+                </button>
               </div>
             </div>
 
