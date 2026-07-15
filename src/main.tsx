@@ -8,19 +8,13 @@ import { ErrorBoundary } from './components/ErrorBoundary';
 // "Unexpected token '<', '<!doctype' ... is not valid JSON" crashes.
 // This occurs when a fetch request to /api receives Vite's HTML fallback (e.g. server starting, offline, or incorrect routing).
 const originalJson = Response.prototype.json;
-Response.prototype.json = async function () {
-  try {
-    const clone = this.clone();
-    const text = await clone.text();
-    if (text.trim().startsWith("<")) {
-      console.warn("⚠️ HTML Response intercepted instead of JSON! URL:", this.url, "Status:", this.status);
-      throw new SyntaxError(
-        `پاسخ سرور نامعتبر است (دریافت HTML به جای اطلاعات JSON). این خطا معمولاً به دلیل قطع بودن موقت وب‌سرور، در حال راه‌اندازی بودن آن، یا اشتباه بودن آدرس API رخ می‌دهد. لطفاً چند لحظه دیگر تلاش کنید.`
-      );
-    }
-  } catch (e) {
-    // If cloning or reading text fails, let the original JSON handler handle it or throw
-    if (e instanceof SyntaxError) throw e;
+Response.prototype.json = function () {
+  const contentType = this.headers.get("content-type");
+  if (contentType && contentType.includes("text/html")) {
+    console.warn("⚠️ HTML Response intercepted instead of JSON! URL:", this.url, "Status:", this.status);
+    return Promise.reject(new SyntaxError(
+      `پاسخ سرور نامعتبر است (دریافت HTML به جای اطلاعات JSON). این خطا معمولاً به دلیل قطع بودن موقت وب‌سرور، در حال راه‌اندازی بودن آن، یا اشتباه بودن آدرس API رخ می‌دهد. لطفاً چند لحظه دیگر تلاش کنید.`
+    ));
   }
   return originalJson.call(this);
 };

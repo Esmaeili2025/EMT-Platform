@@ -291,7 +291,7 @@ export default function App() {
           endpointLabel: "ثبت بازدید (Visits Log POST API)"
         });
       } catch (err) {
-        console.error("Failed to log visit:", err);
+        console.warn("Failed to log visit:", err);
       }
     };
     logVisit();
@@ -312,7 +312,7 @@ export default function App() {
           }
         }
       } catch (err) {
-        console.error("Failed to fetch statistics:", err);
+        console.warn("Failed to fetch statistics:", err);
       }
     };
     fetchStats();
@@ -336,7 +336,7 @@ export default function App() {
           setNetworkInfo({ realIp: data.realIp, mappedIp: data.mappedIp });
         }
       } catch (err) {
-        console.error("Failed to fetch network info:", err);
+        console.warn("Failed to fetch network info:", err);
       }
     };
     fetchNetworkInfo();
