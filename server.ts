@@ -5,6 +5,7 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import os from "os";
+import net from "net";
 import { createServer as createViteServer } from "vite";
 import { GoogleGenAI } from "@google/genai";
 import { 
@@ -622,6 +623,53 @@ app.get("/api/health", (req, res) => {
     gemini_ai_status: geminiConfigured ? "connected" : "heuristic_fallback",
     active_connections: 184,
     latency_ms: 12
+  });
+});
+
+// API: Diagnostic tool to check if ports 3000, 3001, and 5000 are open and listening
+app.get("/api/diagnostic/ports", async (req, res) => {
+  const ports = [3000, 3001, 5000];
+  const results = [];
+
+  for (const port of ports) {
+    const isListening = await new Promise<boolean>((resolve) => {
+      const socket = new net.Socket();
+      socket.setTimeout(600);
+      
+      socket.on("connect", () => {
+        socket.destroy();
+        resolve(true);
+      });
+      
+      socket.on("timeout", () => {
+        socket.destroy();
+        resolve(false);
+      });
+      
+      socket.on("error", () => {
+        socket.destroy();
+        resolve(false);
+      });
+      
+      socket.connect(port, "127.0.0.1");
+    });
+
+    results.push({
+      port,
+      status: isListening ? "listening" : "closed",
+      description: port === 3000 
+        ? "پورت اصلی سامانه ترجمه و وب‌سرور (Express + Vite)" 
+        : port === 3001 
+          ? "پورت جایگزین پردازش ثانویه هوش مصنوعی" 
+          : "پورت پیش‌فرض سرویس Active Directory"
+    });
+  }
+
+  res.json({
+    success: true,
+    ports: results,
+    timestamp: new Date().toISOString(),
+    host: req.headers.host || "127.0.0.1:3000"
   });
 });
 

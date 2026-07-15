@@ -3263,7 +3263,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
               {isOfflineTranslationMode ? (
                 <span className="flex items-center gap-1 text-rose-400 font-extrabold bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/20">
                   <WifiOff className="h-3 w-3 animate-pulse" />
-                  سامانه: آفلاین-فرست (Ollama)
+                  سامانه: آفلاین (Ollama)
                 </span>
               ) : (
                 <span className="flex items-center gap-1 text-emerald-400 font-extrabold bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20">
@@ -3534,7 +3534,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
                             setIsComparisonMode(false);
                             setSelectedEngine("Ollama");
                           }
-                          addSystemLog(nextMode ? "فعال‌سازی حالت اولویت آفلاین (آفلاین-فرست) برای ترجمه" : "غیرفعال‌سازی حالت اولویت آفلاین");
+                          addSystemLog(nextMode ? "فعال‌سازی حالت اولویت آفلاین برای ترجمه" : "غیرفعال‌سازی حالت اولویت آفلاین");
                         }}
                         className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border ${
                           isOfflineTranslationMode
@@ -3545,7 +3545,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
                         type="button"
                       >
                         <WifiOff className="h-3.5 w-3.5" />
-                        {isOfflineTranslationMode ? "حالت آفلاین-فرست (فعال)" : "سوئیچ به آفلاین-فرست"}
+                        {isOfflineTranslationMode ? "حالت آفلاین (فعال)" : "سوئیچ به آفلاین"}
                       </button>
 
                       {/* Toggle Comparison Mode Button */}
@@ -3567,7 +3567,7 @@ Interim Payment Certificates (IPCs) shall be compiled based on joint measurement
                               ? "bg-amber-500/10 text-amber-700 border-amber-500/30 cursor-pointer"
                               : "bg-slate-100 text-slate-600 border-slate-200 hover:bg-slate-200 cursor-pointer"
                         }`}
-                        title={isOfflineTranslationMode ? "در حالت آفلاین-فرست مقایسه همزمان در دسترس نیست" : "مقایسه همزمان دو موتور ترجمه"}
+                        title={isOfflineTranslationMode ? "در حالت آفلاین مقایسه همزمان در دسترس نیست" : "مقایسه همزمان دو موتور ترجمه"}
                         type="button"
                       >
                         <Columns className="h-3.5 w-3.5 text-amber-600" />
